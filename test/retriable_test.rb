@@ -45,6 +45,66 @@ class RetriableTest < MiniTest::Unit::TestCase
   rescue ArgumentError
     assert_equal 5, i
   end
+  
+  def test_with_on_return_and_criteria_was_met
+    i = 0
+    
+    tries_values = [1,2,3]
+    retry_if_less_than_three = Proc.new do |return_value, tries|
+      expected_param_value = tries_values.shift
+      assert_equal expected_param_value, tries
+      assert_equal return_value, tries
+
+      return_value < 3 
+    end
+    
+    return_values = [1,2,3,4,5]
+    retriable :on_return => retry_if_less_than_three, :tries => 5 do
+      i += 1
+      return_values.shift
+    end
+
+    assert_equal 3, i
+  end
+
+  def test_with_on_return_and_criteria_was_not_met
+    i = 0
+    
+    tries_values = [1,2,3,4,5]
+    retry_if_less_than_ten = Proc.new do |return_value, tries|
+      expected_param_value = tries_values.shift
+      assert_equal expected_param_value, tries
+      assert_equal return_value, tries
+
+      return_value < 10 
+    end
+    
+    return_values = [1,2,3,4,5]
+    result = retriable :on_return => retry_if_less_than_ten, :tries => 5 do
+      i += 1
+      return_values.shift
+    end
+
+    assert_equal 5, result
+    assert_equal 5, i
+  end
+
+  def test_sleep_with_proc
+    sleep_values = []
+    Kernel.send(:define_method, :sleep) do |n|
+      sleep_values << n
+    end
+    
+    twice_attempts = Proc.new do |attempt|
+      2*attempt
+    end
+
+    retriable :interval => twice_attempts, :tries => 4 do 
+      raise StandardError
+    end
+  rescue StandardError
+    assert_equal [2,4,6], sleep_values
+  end
 
   def test_with_exception_regex
     begin

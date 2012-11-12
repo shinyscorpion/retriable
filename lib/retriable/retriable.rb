@@ -4,6 +4,8 @@ require 'timeout'
 
 module Retriable
   extend self
+  
+  class InvalidReturn < StandardError; end;
 
   class Retry
     attr_accessor :tries
@@ -11,6 +13,7 @@ module Retriable
     attr_accessor :timeout
     attr_accessor :on
     attr_accessor :on_retry
+    attr_accessor :on_return
 
     def initialize
       @tries      = 3
@@ -18,28 +21,42 @@ module Retriable
       @timeout    = nil
       @on         = [StandardError, Timeout::Error]
       @on_retry   = nil
+      @on_return  = nil
 
       yield self if block_given?
+    end
+    
+    def perform_sleep(retry_count)
+      if @interval.kind_of?(Proc)
+        sleep_interval = @interval.call(retry_count) 
+      else
+        sleep_interval = @interval
+      end
+      sleep(sleep_interval) if sleep_interval > 0
     end
 
     def perform
       count = 0
+      result = nil
       begin
         if @timeout
-          Timeout::timeout(@timeout) { yield }
+          Timeout::timeout(@timeout) { result = yield }
         else
-          yield
+          result = yield
         end
+        raise InvalidReturn if @on_return && @on_return.call(result, count+1)
+        result
       rescue Exception => exception
         if matches_exception_spec? exception
           @tries -= 1
           if @tries > 0
             count += 1
-            sleep @interval if @interval > 0
+            perform_sleep(count)
             @on_retry.call(exception, count) if @on_retry
             retry
           else
-            raise
+            raise unless exception.kind_of?(InvalidReturn)
+            result
           end
         else
           raise
@@ -73,6 +90,8 @@ module Retriable
       r.interval   = opts[:interval] if opts[:interval]
       r.timeout    = opts[:timeout] if opts[:timeout]
       r.on_retry   = opts[:on_retry] if opts[:on_retry]
+      r.on_return  = opts[:on_return] if opts[:on_return]
+      r.on << InvalidReturn if r.on_return 
     end.perform(&block)
   end
 end

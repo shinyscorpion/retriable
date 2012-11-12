@@ -55,6 +55,9 @@ Here are the available options:
 `Timeout::Error`, array of exceptions to rescue for each attempt, or
 and array of exception & regex pairs.
 
+`on_return` (default: nil) - Allows the return value of the code block
+to be examined and retried if the Proc returns true
+
 `on_retry` - (default: nil) - Proc to call after each attempt is rescued
 
 You can pass options via an options `Hash`. This example will only retry on a `Timeout::Error`, retry 3 times and sleep for a full second before each attempt.
@@ -107,6 +110,34 @@ retriable :interval => (200/1000.0), :timeout => (500/1000.0) do
   # code here...
 end
 ```
+
+You can pass a proc for the sleep interval:
+
+```ruby
+retriable :interval => Proc.new { |attempt| (2**attempt-1)/2 } do
+  # code here...
+end # backoff exponentially
+```
+
+You can retry based on the return value of the code block:
+
+```ruby
+retriable :on_return => Proc.new { |return_value, attempt_count| return_value != OK } do
+  # code here...
+end
+```
+
+The Proc provided to the :on_return option should return true if the code block should be executed again. If all retry attempts have been exhausted, the last return value of the block is returned in the case there was no exception thrown.
+
+```ruby
+return_values = [1,2,3]
+result = retriable :tries => 3, :on_return => Proc.new { |return_value, attempt_count| return_value < 10 } do
+  return_values.shift
+end
+
+result==3 # true  
+```
+
 
 Retriable also provides a callback called `:on_retry` that will run after an exception is rescued. This callback provides the number of `tries`, and the `exception` that was raised in the current attempt. As these are specified in a `Proc`, unnecessary variables can be left out of the parameter list.
 
@@ -162,4 +193,4 @@ end
 Credits
 -------
 
-Retriable was originally forked from the retryable-rb gem by [Robert Sosinski](https://github.com/robertsosinski), which in turn originally inspired by code written by [Michael Celona](http://github.com/mcelona) and later assisted by [David Malin](http://github.com/dmalin). The [attempt](https://rubygems.org/gems/attempt) gem by Daniel J. Berger was also an inspiration.
+Retriable was originally forked from the retryable-rb gem by [Robert Sosinski](https://github.com/robertsosinski), which in turn originally inspired by code written by [Michael Celona](http://github.com/mcelona) and later assisted by [David Malin](http://github.com/dmalin). The [attempt](https://rubygems.org/gems/attempt) gem by Daniel J. Berger was also an inspiration. [Lamont Nelson] (http://github.com/lamontnelson) contributed the code for retrying based on the return value of the code block.
