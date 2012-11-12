@@ -89,6 +89,23 @@ class RetriableTest < MiniTest::Unit::TestCase
     assert_equal 5, i
   end
 
+  def test_sleep_with_proc
+    sleep_values = []
+    Kernel.send(:define_method, :sleep) do |n|
+      sleep_values << n
+    end
+    
+    twice_attempts = Proc.new do |attempt|
+      2*attempt
+    end
+
+    retriable :interval => twice_attempts, :tries => 4 do 
+      raise StandardError
+    end
+  rescue StandardError
+    assert_equal [2,4,6], sleep_values
+  end
+
   def test_with_exception_regex
     begin
       i = 0

@@ -111,6 +111,14 @@ retriable :interval => (200/1000.0), :timeout => (500/1000.0) do
 end
 ```
 
+You can pass a proc for the sleep interval:
+
+```ruby
+retriable :interval => Proc.new { |attempt| (2**attempt-1)/2 } do
+  # code here...
+end # backoff exponentially
+```
+
 You can retry based on the return value of the code block:
 
 ```ruby

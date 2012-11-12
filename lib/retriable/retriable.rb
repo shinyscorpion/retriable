@@ -25,6 +25,15 @@ module Retriable
 
       yield self if block_given?
     end
+    
+    def perform_sleep(retry_count)
+      if @interval.kind_of?(Proc)
+        sleep_interval = @interval.call(retry_count) 
+      else
+        sleep_interval = @interval
+      end
+      sleep(sleep_interval) if sleep_interval > 0
+    end
 
     def perform
       count = 0
@@ -42,7 +51,7 @@ module Retriable
           @tries -= 1
           if @tries > 0
             count += 1
-            sleep @interval if @interval > 0
+            perform_sleep(count)
             @on_retry.call(exception, count) if @on_retry
             retry
           else
